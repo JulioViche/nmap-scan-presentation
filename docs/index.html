@@ -1,0 +1,1851 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pentesting PTES — Sistema de Atención QR</title>
+  <meta name="description" content="Presentación de evidencia de pruebas de penetración bajo metodología PTES para el Sistema de Atención QR. Integrantes: Jairo Bonilla, Reishel Tipán, Julio Viche." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ===========================
+       DESIGN TOKENS & RESET
+    =========================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:       #060b14;
+      --bg-surface:    #0d1520;
+      --bg-card:       #111d2e;
+      --bg-card-hover: #162437;
+      --border:        rgba(0,200,255,.12);
+      --border-strong: rgba(0,200,255,.28);
+
+      --cyan:   #00c8ff;
+      --cyan-d: #008db3;
+      --green:  #00e5a0;
+      --red:    #ff4d6a;
+      --orange: #ff8c42;
+      --yellow: #ffe44d;
+      --purple: #a855f7;
+      --blue:   #3b82f6;
+
+      --text-1: #e8f0fc;
+      --text-2: #8ba3c4;
+      --text-3: #4d6680;
+
+      --radius:  16px;
+      --radius-sm: 10px;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-base);
+      color: var(--text-1);
+      overflow: hidden;
+    }
+
+    /* ===========================
+       PRESENTATION WRAPPER
+    =========================== */
+    #presentation {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px 6px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Ambient gradient blobs */
+    #presentation::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 10% 20%, rgba(0,200,255,.06) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 50% at 90% 80%, rgba(168,85,247,.05) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 50% 50%, rgba(0,229,160,.03) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ===========================
+       SLIDE VIEWPORT
+    =========================== */
+    #slide-viewport {
+      position: relative;
+      z-index: 1;
+      width: 98vw;
+      height: calc(100vh - 65px);
+      max-width: 177vh;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(0,200,255,0.05);
+    }
+
+    /* ===========================
+       SLIDES CONTAINER
+    =========================== */
+    .slides-track {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      transition: transform .55s cubic-bezier(.77,0,.175,1);
+    }
+
+    /* ===========================
+       INDIVIDUAL SLIDE
+    =========================== */
+    .slide {
+      flex: 0 0 100%;
+      height: 100%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top accent bar */
+    .slide::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--cyan), var(--purple), var(--green));
+      z-index: 10;
+    }
+
+    /* ===========================
+       COMMON SLIDE ELEMENTS
+    =========================== */
+    .slide-header {
+      padding: clamp(14px, 2.2vh, 24px) clamp(20px, 3vw, 40px) 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .slide-icon {
+      width: clamp(40px, 4.8vh, 54px);
+      height: clamp(40px, 4.8vh, 54px);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(22px, 2.8vh, 30px);
+      flex-shrink: 0;
+    }
+
+    .slide-icon.cyan   { background: rgba(0,200,255,.12); border: 1px solid rgba(0,200,255,.25); }
+    .slide-icon.green  { background: rgba(0,229,160,.12); border: 1px solid rgba(0,229,160,.25); }
+    .slide-icon.red    { background: rgba(255,77,106,.12); border: 1px solid rgba(255,77,106,.25); }
+    .slide-icon.purple { background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.25); }
+    .slide-icon.orange { background: rgba(255,140,66,.12); border: 1px solid rgba(255,140,66,.25); }
+    .slide-icon.yellow { background: rgba(255,228,77,.12); border: 1px solid rgba(255,228,77,.25); }
+    .slide-icon.blue   { background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.25); }
+
+    .slide-tag {
+      font-size: clamp(13px, 1.6vh, 18px);
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+
+    .slide-body {
+      flex: 1;
+      padding: clamp(10px, 1.5vh, 18px) clamp(20px, 3vw, 40px) clamp(14px, 2vh, 24px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1.slide-title {
+      font-size: clamp(23px, 3.2vh, 36px);
+      font-weight: 800;
+      color: var(--text-1);
+      line-height: 1.2;
+      margin-bottom: 2px;
+    }
+
+    h2.slide-title {
+      font-size: clamp(19px, 2.5vh, 28px);
+      font-weight: 700;
+      color: var(--text-1);
+    }
+
+    .slide-subtitle {
+      font-size: clamp(15px, 2vh, 21px);
+      color: var(--text-2);
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: clamp(8px, 1.2vh, 14px) 0;
+    }
+
+    /* ===========================
+       TAG PILL
+    =========================== */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 99px;
+      font-size: clamp(13.5px, 1.7vh, 18px);
+      font-weight: 600;
+      letter-spacing: .04em;
+    }
+    .pill.cyan   { background: rgba(0,200,255,.12); color: var(--cyan);   border: 1px solid rgba(0,200,255,.25); }
+    .pill.green  { background: rgba(0,229,160,.12); color: var(--green);  border: 1px solid rgba(0,229,160,.25); }
+    .pill.red    { background: rgba(255,77,106,.12); color: var(--red);   border: 1px solid rgba(255,77,106,.25); }
+    .pill.orange { background: rgba(255,140,66,.12); color: var(--orange); border: 1px solid rgba(255,140,66,.25); }
+    .pill.yellow { background: rgba(255,228,77,.12); color: var(--yellow); border: 1px solid rgba(255,228,77,.25); }
+    .pill.purple { background: rgba(168,85,247,.12); color: var(--purple); border: 1px solid rgba(168,85,247,.25); }
+    .pill.blue   { background: rgba(59,130,246,.12); color: var(--blue);  border: 1px solid rgba(59,130,246,.25); }
+
+    /* ===========================
+       CODE BLOCK
+    =========================== */
+    .code-block {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(13px, 1.75vh, 17.5px);
+      line-height: 1.55;
+      background: rgba(0,0,0,.45);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: clamp(10px, 1.4vh, 16px) clamp(12px, 1.5vw, 18px);
+      color: #a8d8f0;
+      overflow: hidden;
+    }
+    .code-block .kw  { color: var(--cyan); }
+    .code-block .cm  { color: var(--text-3); font-style: italic; }
+    .code-block .str { color: var(--green); }
+    .code-block .num { color: var(--orange); }
+    .code-block .flag { color: var(--yellow); }
+
+    /* ===========================
+       DATA TABLE
+    =========================== */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: clamp(15px, 2vh, 19.5px);
+    }
+    .data-table th {
+      text-align: left;
+      font-size: clamp(13px, 1.6vh, 17px);
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      padding: clamp(6px, 1vh, 10px) 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: clamp(6px, 1vh, 10px) 12px;
+      color: var(--text-2);
+      border-bottom: 1px solid rgba(0,200,255,.05);
+      vertical-align: middle;
+    }
+    .data-table td:first-child { color: var(--text-1); font-weight: 500; }
+    .data-table tr:last-child td { border-bottom: none; }
+
+    /* ===========================
+       GRID LAYOUTS
+    =========================== */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(8px, 1.2vw, 14px); }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(8px, 1.2vw, 14px); }
+
+    /* ===========================
+       CARDS
+    =========================== */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: clamp(10px, 1.5vh, 16px) clamp(12px, 1.5vw, 18px);
+    }
+    .card-title {
+      font-size: clamp(13px, 1.6vh, 17px);
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 4px;
+    }
+    .card-value {
+      font-size: clamp(30px, 4.2vh, 44px);
+      font-weight: 800;
+      color: var(--cyan);
+      line-height: 1;
+    }
+    .card-sub {
+      font-size: clamp(13.5px, 1.7vh, 18px);
+      color: var(--text-3);
+      margin-top: 4px;
+    }
+
+    /* ===========================
+       FINDING CARD
+    =========================== */
+    .finding {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: clamp(8px, 1.2vh, 14px) clamp(10px, 1.2vw, 16px);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: clamp(4px, 0.8vh, 8px);
+    }
+    .finding-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+    .finding-label {
+      font-size: clamp(15px, 2vh, 20px);
+      font-weight: 600;
+      color: var(--text-1);
+      margin-bottom: 2px;
+    }
+    .finding-desc {
+      font-size: clamp(13.5px, 1.8vh, 18px);
+      color: var(--text-2);
+      line-height: 1.45;
+    }
+    .finding-badge {
+      margin-left: auto;
+      flex-shrink: 0;
+      align-self: center;
+    }
+
+    /* ===========================
+       PHASE TIMELINE
+    =========================== */
+    .timeline {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .timeline-phase {
+      flex: 1;
+      padding: clamp(8px, 1.4vh, 14px) 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      text-align: center;
+      position: relative;
+      transition: border-color .2s;
+    }
+    .timeline-phase.active {
+      border-color: var(--cyan);
+      background: rgba(0,200,255,.06);
+    }
+    .timeline-phase.done {
+      border-color: rgba(0,229,160,.3);
+      background: rgba(0,229,160,.04);
+    }
+    .timeline-num {
+      font-size: clamp(12.5px, 1.5vh, 16px);
+      font-weight: 700;
+      color: var(--text-3);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .timeline-name {
+      font-size: clamp(13.5px, 1.7vh, 18px);
+      font-weight: 600;
+      color: var(--text-2);
+      line-height: 1.3;
+    }
+    .timeline-phase.active .timeline-name { color: var(--cyan); }
+    .timeline-phase.done  .timeline-name  { color: var(--green); }
+
+    /* ===========================
+       PROGRESS BAR
+    =========================== */
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: clamp(6px, 1vh, 10px);
+    }
+    .progress-label {
+      font-size: clamp(14.5px, 1.9vh, 19.5px);
+      color: var(--text-2);
+      min-width: 140px;
+    }
+    .progress-bar {
+      flex: 1;
+      height: 9px;
+      background: rgba(255,255,255,.06);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--cyan), var(--green));
+    }
+    .progress-val {
+      font-size: clamp(14px, 1.7vh, 18px);
+      font-weight: 600;
+      color: var(--text-3);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    /* ===========================
+       SCREENSHOT FRAME (FULL IMAGE DISPLAY - NO TRUNCATION)
+    =========================== */
+    .screenshot-frame {
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      position: relative;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+    .screenshot-frame::before {
+      content: '';
+      display: block;
+      width: 100%;
+      height: 18px;
+      background: rgba(0,0,0,0.5);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .screenshot-frame img {
+      width: 100%;
+      height: auto;
+      max-height: 250px;
+      object-fit: contain;
+      object-position: center;
+      display: block;
+      padding: 6px;
+    }
+    .screenshot-caption {
+      font-size: clamp(12px, 1.5vh, 15px);
+      color: var(--text-3);
+      text-align: center;
+      margin-top: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ===========================
+       SEPARATOR LABEL
+    =========================== */
+    .section-label {
+      font-size: clamp(13.5px, 1.7vh, 18px);
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: clamp(6px, 1vh, 10px);
+    }
+
+    /* ===========================
+       NAVIGATION
+    =========================== */
+    #nav {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-top: 6px;
+    }
+
+    #nav button {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      color: var(--text-2);
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .2s;
+    }
+    #nav button:hover:not(:disabled) {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: rgba(0,200,255,.12);
+      transform: scale(1.05);
+    }
+    #nav button:disabled { opacity: .3; cursor: not-allowed; }
+
+    #slide-counter {
+      font-size: 14px;
+      color: var(--text-2);
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      min-width: 70px;
+      text-align: center;
+    }
+
+    /* Dot indicators */
+    #dot-track {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-3);
+      transition: all .25s;
+      cursor: pointer;
+    }
+    .dot.active {
+      background: var(--cyan);
+      width: 22px;
+      border-radius: 99px;
+    }
+
+    /* Keyboard hint */
+    #key-hint {
+      position: fixed;
+      bottom: 12px;
+      right: 20px;
+      font-size: 12px;
+      color: var(--text-3);
+      z-index: 10;
+    }
+    #key-hint kbd {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: inherit;
+    }
+
+    /* ===========================
+       SLIDE-SPECIFIC: COVER
+    =========================== */
+    #slide-cover {
+      background: var(--bg-base);
+      justify-content: center;
+      align-items: center;
+    }
+    #slide-cover::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 60%, rgba(0,200,255,.08) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 20% 30%, rgba(168,85,247,.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .cover-content {
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      padding: 0 40px;
+    }
+    .cover-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0,200,255,.08);
+      border: 1px solid rgba(0,200,255,.25);
+      border-radius: 99px;
+      padding: 8px 22px;
+      font-size: clamp(14px, 1.8vh, 18px);
+      font-weight: 700;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: clamp(16px, 2.5vh, 28px);
+    }
+    .cover-eyebrow span { opacity: .5; }
+    .cover-title {
+      font-size: clamp(48px, 7.5vh, 76px);
+      font-weight: 900;
+      line-height: 1.1;
+      background: linear-gradient(135deg, #e8f0fc 30%, var(--cyan) 70%, var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: clamp(8px, 1.5vh, 16px);
+    }
+    .cover-sub {
+      font-size: clamp(18px, 2.8vh, 25px);
+      color: var(--text-2);
+      margin-bottom: clamp(20px, 3vh, 32px);
+    }
+    .cover-team {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .member-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 8px 20px 8px 12px;
+    }
+    .member-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--bg-base);
+    }
+    .member-name {
+      font-size: clamp(16px, 2.1vh, 21px);
+      font-weight: 600;
+      color: var(--text-1);
+    }
+    .cover-meta {
+      margin-top: clamp(20px, 3vh, 30px);
+      display: flex;
+      gap: 28px;
+      justify-content: center;
+    }
+    .cover-meta-item {
+      font-size: clamp(14px, 1.8vh, 18px);
+      color: var(--text-3);
+    }
+    .cover-meta-item strong {
+      color: var(--text-2);
+      font-weight: 600;
+    }
+
+    /* ===========================
+       MISC UTILITIES
+    =========================== */
+    .row { display: flex; gap: 12px; }
+    .col { display: flex; flex-direction: column; gap: 0; }
+    .gap-6 { gap: 8px; }
+    .gap-8 { gap: 10px; }
+    .mt-6  { margin-top: 8px; }
+    .mt-8  { margin-top: 10px; }
+    .mt-10 { margin-top: 14px; }
+    .flex-1 { flex: 1; }
+    .text-cyan   { color: var(--cyan);   }
+    .text-green  { color: var(--green);  }
+    .text-red    { color: var(--red);    }
+    .text-orange { color: var(--orange); }
+    .text-yellow { color: var(--yellow); }
+    .text-purple { color: var(--purple); }
+    .text-blue   { color: var(--blue);   }
+    .text-muted  { color: var(--text-3); }
+    .fw-700 { font-weight: 700; }
+    .mono   { font-family: 'JetBrains Mono', monospace; }
+
+    /* Grid split */
+    .split-30-70 { display: grid; grid-template-columns: 3fr 7fr; gap: 16px; }
+    .split-40-60 { display: grid; grid-template-columns: 4fr 6fr; gap: 16px; }
+    .split-50-50 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .split-60-40 { display: grid; grid-template-columns: 6fr 4fr; gap: 16px; }
+  </style>
+</head>
+<body>
+
+<div id="presentation">
+  <div id="slide-viewport">
+    <div class="slides-track" id="slides-track">
+
+      <!-- =====================
+           SLIDE 1: COVER
+      ===================== -->
+      <div class="slide" id="slide-cover">
+        <div class="cover-content">
+          <div class="cover-eyebrow">
+            <span>🔐</span> Penetration Testing <span>•</span> Metodología PTES
+          </div>
+          <div class="cover-title">Sistema de<br/>Atención QR</div>
+          <div class="cover-sub">Evidencia práctica de pruebas de penetración — Docker Microservices Stack</div>
+          <div class="cover-team">
+            <div class="member-chip">
+              <div class="member-avatar" style="background:var(--cyan)">J</div>
+              <div class="member-name">Jairo Bonilla</div>
+            </div>
+            <div class="member-chip">
+              <div class="member-avatar" style="background:var(--purple)">R</div>
+              <div class="member-name">Reishel Tipán</div>
+            </div>
+            <div class="member-chip">
+              <div class="member-avatar" style="background:var(--green)">J</div>
+              <div class="member-name">Julio Viche</div>
+            </div>
+          </div>
+          <div class="cover-meta">
+            <div class="cover-meta-item"><strong>Objetivo:</strong> 10.40.37.240</div>
+            <div class="cover-meta-item"><strong>Herramienta:</strong> Kali Linux</div>
+            <div class="cover-meta-item"><strong>Metodología:</strong> PTES</div>
+            <div class="cover-meta-item"><strong>Entorno:</strong> Docker</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 2: OVERVIEW PTES
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon cyan">📋</div>
+          <div>
+            <div class="slide-tag">Metodología</div>
+            <h1 class="slide-title">PTES — Penetration Testing Execution Standard</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="section-label">Flujo de fases ejecutadas</div>
+          <div class="timeline">
+            <div class="timeline-phase done">
+              <div class="timeline-num">F-1</div>
+              <div class="timeline-name">Pre-engagement</div>
+            </div>
+            <div class="timeline-phase done">
+              <div class="timeline-num">F-2</div>
+              <div class="timeline-name">Intelligence Gathering</div>
+            </div>
+            <div class="timeline-phase active">
+              <div class="timeline-num">F-3</div>
+              <div class="timeline-name">Threat Modeling</div>
+            </div>
+            <div class="timeline-phase">
+              <div class="timeline-num">F-4</div>
+              <div class="timeline-name">Vulnerability Analysis</div>
+            </div>
+            <div class="timeline-phase">
+              <div class="timeline-num">F-5</div>
+              <div class="timeline-name">Exploitation</div>
+            </div>
+            <div class="timeline-phase">
+              <div class="timeline-num">F-6</div>
+              <div class="timeline-name">Post-Exploitation</div>
+            </div>
+            <div class="timeline-phase">
+              <div class="timeline-num">F-7</div>
+              <div class="timeline-name">Reporting</div>
+            </div>
+          </div>
+
+          <div class="mt-10 section-label">Stack objetivo</div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Servicio</th>
+                <th>Puerto</th>
+                <th>Tipo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Frontend (Vite)</td>
+                <td class="mono text-cyan">5173</td>
+                <td>Web SPA</td>
+                <td><span class="pill green">✓ Abierto</span></td>
+              </tr>
+              <tr>
+                <td>admin-service</td>
+                <td class="mono text-cyan">3001</td>
+                <td>API/Backend Node.js</td>
+                <td><span class="pill green">✓ Abierto</span></td>
+              </tr>
+              <tr>
+                <td>auth-service</td>
+                <td class="mono text-cyan">3003</td>
+                <td>Autenticación JWT</td>
+                <td><span class="pill green">✓ Abierto</span></td>
+              </tr>
+              <tr>
+                <td>patient-service</td>
+                <td class="mono text-cyan">3005</td>
+                <td>API PII/PHI</td>
+                <td><span class="pill green">✓ Abierto</span></td>
+              </tr>
+              <tr>
+                <td>PostgreSQL</td>
+                <td class="mono text-cyan">5432</td>
+                <td>Base de datos</td>
+                <td><span class="pill green">✓ Abierto</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 3: PRE-ENGAGEMENT
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon blue">📝</div>
+          <div>
+            <div class="slide-tag">Fase 1</div>
+            <h1 class="slide-title">Pre-engagement Interactions</h1>
+          </div>
+          <div style="margin-left:auto"><span class="pill blue">F-1 COMPLETADA</span></div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-40-60">
+            <div class="col gap-6">
+              <div class="section-label">Checklist</div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label">Estructura de directorios</div>
+                  <div class="finding-desc">Creada en <span class="mono text-cyan">~/ptes-audit/</span></div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label">Alcance documentado</div>
+                  <div class="finding-desc"><span class="mono">pre-engagement/scope.txt</span></div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label">IP de origen definida</div>
+                  <div class="finding-desc">Kali Linux en misma LAN</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--orange)"></div>
+                <div>
+                  <div class="finding-label">Autorización escrita</div>
+                  <div class="finding-desc">Pendiente formalización</div>
+                </div>
+              </div>
+              <div class="card mt-6">
+                <div class="card-title">Objetivo definido</div>
+                <div class="mono text-cyan" style="font-size:20px;font-weight:700;">10.40.37.240</div>
+                <div class="card-sub">Puertos autorizados: 5432, 3001–3005, 5173</div>
+              </div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Verificación de conectividad</div>
+              <div class="code-block">
+<span class="cm"># Ping de verificación — host activo</span>
+<span class="kw">ping</span> -c 4 <span class="num">10.40.37.240</span>
+
+<span class="str">PING 10.40.37.240 56(84) bytes of data.
+64 bytes from 10.40.37.240: icmp_seq=1 ttl=255 time=1.07 ms
+64 bytes from 10.40.37.240: icmp_seq=2 ttl=255 time=1.13 ms
+64 bytes from 10.40.37.240: icmp_seq=3 ttl=255 time=1.09 ms
+64 bytes from 10.40.37.240: icmp_seq=4 ttl=255 time=1.12 ms
+
+--- 10.40.37.240 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss
+rtt min/avg/max = 1.07/1.10/1.13 ms</span>
+              </div>
+              <div class="finding" style="background:rgba(0,229,160,.05);border-color:rgba(0,229,160,.2)">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label text-green">Resultado: Host activo ✓</div>
+                  <div class="finding-desc">4/4 paquetes recibidos · 0% packet loss · RTT ~1.1 ms · TTL=255 (acceso LAN directo, sin NAT)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 4: NMAP PORTS
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon cyan">🔍</div>
+          <div>
+            <div class="slide-tag">Fase 2 · Reconocimiento de Red</div>
+            <h1 class="slide-title">Escaneo de Puertos — Nmap</h1>
+          </div>
+          <div style="margin-left:auto"><span class="pill cyan">F-2 ACTIVA</span></div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Comandos ejecutados</div>
+              <div class="code-block">
+<span class="cm"># Host discovery</span>
+<span class="kw">nmap</span> -sn <span class="num">10.40.37.240</span> \
+  -oA intel/host-discovery
+
+<span class="cm"># Escaneo rápido (top-1000 TCP)</span>
+<span class="kw">nmap</span> <span class="flag">-sS -T4</span> <span class="num">10.40.37.240</span> \
+  -oA intel/ports-quick
+              </div>
+              <div class="section-label mt-6">Puertos autorizados confirmados</div>
+              <div class="row gap-6" style="flex-wrap:wrap">
+                <span class="pill green">3001 ✓</span>
+                <span class="pill green">3003 ✓</span>
+                <span class="pill green">3005 ✓</span>
+                <span class="pill green">5432 ✓</span>
+                <span class="pill orange">3002 —</span>
+                <span class="pill orange">3004 —</span>
+              </div>
+              <div class="finding" style="background:rgba(255,140,66,.05);border-color:rgba(255,140,66,.2)">
+                <div class="finding-dot" style="background:var(--orange)"></div>
+                <div>
+                  <div class="finding-label">3002 y 3004 no en top-1000</div>
+                  <div class="finding-desc">No son puertos "conocidos" de nmap. Confirmados en escaneo dirigido 2.2</div>
+                </div>
+              </div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Observación: puertos fuera de alcance</div>
+              <table class="data-table">
+                <thead><tr><th>Puerto</th><th>Servicio</th><th>Acción</th></tr></thead>
+                <tbody>
+                  <tr><td>135</td><td>msrpc</td><td><span class="pill orange">Observado</span></td></tr>
+                  <tr><td>139</td><td>netbios-ssn</td><td><span class="pill orange">Observado</span></td></tr>
+                  <tr><td>445</td><td>microsoft-ds</td><td><span class="pill orange">Observado</span></td></tr>
+                  <tr><td>3000</td><td>ppp</td><td><span class="pill orange">Observado</span></td></tr>
+                  <tr><td>8080</td><td>http-proxy</td><td><span class="pill orange">Observado</span></td></tr>
+                  <tr><td>6000</td><td>X11</td><td><span class="pill orange">Observado</span></td></tr>
+                </tbody>
+              </table>
+              <div class="screenshot-frame">
+                <img src="../evidence/02-nmap-ports-quick.png" alt="nmap ports quick scan" />
+              </div>
+              <div class="screenshot-caption">02-nmap-ports-quick.png</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 5: NMAP SERVICES
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon cyan">⚙️</div>
+          <div>
+            <div class="slide-tag">Fase 2 · Enumeración de Servicios</div>
+            <h1 class="slide-title">Fingerprinting de Versiones — Nmap -sV -sC</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-40-60">
+            <div class="col gap-6">
+              <div class="code-block">
+<span class="kw">nmap</span> <span class="flag">-sV -sC</span> \
+  -p <span class="num">5432,3001,3002,3003,3004,3005,5173</span> \
+  <span class="num">10.40.37.240</span> \
+  -oA intel/services-detailed
+              </div>
+              <div class="screenshot-frame">
+                <img src="../evidence/03-nmap-services-detailed.png" alt="nmap services detailed" />
+              </div>
+              <div class="screenshot-caption">03-nmap-services-detailed.png</div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Hallazgos por puerto</div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--cyan)"></div>
+                <div>
+                  <div class="finding-label">3001–3005 / TCP</div>
+                  <div class="finding-desc"><strong>Node.js Express framework</strong> — HTTP, respuestas JSON, confirmados los 5 microservicios</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--blue)"></div>
+                <div>
+                  <div class="finding-label">5432 / TCP — PostgreSQL</div>
+                  <div class="finding-desc">Versión de idioma <strong>Spanish</strong> detectada vía banner grabbing</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--purple)"></div>
+                <div>
+                  <div class="finding-label">5173 / TCP — Frontend Vite</div>
+                  <div class="finding-desc">HTTP no reconocido por nmap. Devuelve <span class="mono">index.html</span> (SPA). Assets hasheados: <span class="mono text-cyan">index-CEAFBvmn.js</span></div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(0,229,160,.04);border-color:rgba(0,229,160,.2)">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label text-green">CORS — preflight frontend</div>
+                  <div class="finding-desc"><span class="mono">204 No Content</span> + <span class="mono">Access-Control-Allow-Methods: GET,HEAD,PUT,PATCH,POST,DELETE</span> con middleware CORS activo</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 6: WHATWEB
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon orange">🌐</div>
+          <div>
+            <div class="slide-tag">Fase 2 · Enumeración Web</div>
+            <h1 class="slide-title">WhatWeb — Fingerprinting de Tecnologías</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Frontend (5173)</div>
+              <div class="code-block">
+<span class="kw">whatweb</span> http://<span class="num">10.40.37.240</span>:<span class="num">5173</span> -v
+              </div>
+              <div class="finding" style="background:rgba(0,229,160,.04);border-color:rgba(0,229,160,.2)">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label text-green">SPA segura</div>
+                  <div class="finding-desc">HTML5 + <span class="mono">&lt;script type="module"&gt;</span> — build Vite minificado. Sin fuga de versión de framework. <span class="mono">Cache-Control: no-cache</span> en HTML raíz.</div>
+                </div>
+              </div>
+              <div class="screenshot-frame">
+                <img src="../evidence/whatweb1.png" alt="whatweb frontend" />
+              </div>
+              <div class="screenshot-caption">whatweb1.png — Frontend SPA</div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Vulnerabilidad encontrada</div>
+              <div class="finding" style="background:rgba(255,77,106,.05);border-color:rgba(255,77,106,.25)">
+                <div class="finding-dot" style="background:var(--red)"></div>
+                <div>
+                  <div class="finding-label text-red">X-Powered-By: Express — Exposición en los 5 microservicios</div>
+                  <div class="finding-desc">Header HTTP expuesto en todas las respuestas. Facilita fingerprinting del framework backend y búsqueda de CVEs específicos.</div>
+                  <div style="margin-top:6px"><span class="pill orange">Severidad: Informativo / Bajo</span></div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(0,229,160,.04);border-color:rgba(0,229,160,.2)">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label text-green">Remediación</div>
+                  <div class="finding-desc"><span class="mono">app.disable('x-powered-by')</span> en cada microservicio, o middleware <span class="mono text-cyan">helmet</span>.</div>
+                </div>
+              </div>
+              <div class="screenshot-frame">
+                <img src="../evidence/whatweb3.png" alt="whatweb backends" />
+              </div>
+              <div class="screenshot-caption">whatweb3.png — Backends Express</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 7: HTTP HEADERS & CORS
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon yellow">🔒</div>
+          <div>
+            <div class="slide-tag">Fase 2 · Headers HTTP & CORS</div>
+            <h1 class="slide-title">Análisis de Headers y Política CORS</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Comandos ejecutados</div>
+              <div class="code-block">
+<span class="cm"># Headers + métodos permitidos</span>
+<span class="kw">curl</span> <span class="flag">-I -X OPTIONS</span> \
+  http://<span class="num">10.40.37.240</span>:<span class="num">5173</span>
+<span class="kw">curl</span> <span class="flag">-I -X OPTIONS</span> \
+  http://<span class="num">10.40.37.240</span>:<span class="num">3001</span>
+<span class="kw">curl</span> <span class="flag">-I -X OPTIONS</span> \
+  http://<span class="num">10.40.37.240</span>:<span class="num">3003</span>
+
+<span class="cm"># Prueba CORS con origen no autorizado</span>
+<span class="kw">curl</span> <span class="flag">-I -X OPTIONS</span> \
+  <span class="flag">-H</span> <span class="str">"Origin: http://evil.com"</span> \
+  http://<span class="num">10.40.37.240</span>:<span class="num">3003</span>
+              </div>
+              <div class="screenshot-frame">
+                <img src="../evidence/headershttp.png" alt="HTTP headers" />
+              </div>
+              <div class="screenshot-caption">headershttp.png</div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Resultados CORS</div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--yellow)"></div>
+                <div>
+                  <div class="finding-label">Preflight sin Origin (3 servicios)</div>
+                  <div class="finding-desc"><span class="mono">204 No Content</span> — <span class="mono">Allow-Methods: GET,HEAD,PUT,PATCH,POST,DELETE</span> — todos los métodos de escritura permitidos en preflight genérico.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(0,229,160,.04);border-color:rgba(0,229,160,.2)">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label text-green">auth-service (3003) — CORS Whitelist ✓</div>
+                  <div class="finding-desc">Devuelve <span class="mono text-red">403 Forbidden</span> ante <span class="mono">Origin: evil.com</span> — whitelist activa, contradice hipótesis inicial de CORS permisivo.</div>
+                </div>
+              </div>
+              <div class="screenshot-frame">
+                <img src="../evidence/04b-cors-check.png" alt="CORS check" />
+              </div>
+              <div class="screenshot-caption">04b-cors-check.png</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 8: GOBUSTER & FFUF
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon purple">📂</div>
+          <div>
+            <div class="slide-tag">Fase 2 · Enumeración de Directorios</div>
+            <h1 class="slide-title">Gobuster — Descubrimiento de Rutas</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-40-60">
+            <div class="col gap-6">
+              <div class="section-label">Comando</div>
+              <div class="code-block">
+<span class="kw">gobuster</span> dir \
+  -u http://<span class="num">10.40.37.240</span>:<span class="num">5173</span> \
+  -w /usr/share/wordlists/dirbuster/\
+directory-list-2.3-medium.txt \
+  -o intel/dirs-frontend.txt
+              </div>
+              <div class="screenshot-frame">
+                <img src="../evidence/gobuster.png" alt="gobuster wildcard" />
+              </div>
+              <div class="screenshot-caption">gobuster.png</div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Hallazgo técnico importante</div>
+              <div class="finding" style="background:rgba(255,228,77,.05);border-color:rgba(255,228,77,.25)">
+                <div class="finding-dot" style="background:var(--yellow)"></div>
+                <div>
+                  <div class="finding-label text-yellow">Wildcard Response detectada</div>
+                  <div class="finding-desc">El servidor devuelve <span class="mono">200 OK (521 bytes)</span> para cualquier ruta inexistente (UUID aleatorio generado por gobuster). Comportamiento esperado de SPA con <strong>client-side routing fallback</strong>: todas las rutas devuelven <span class="mono">index.html</span> al router del frontend.</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--cyan)"></div>
+                <div>
+                  <div class="finding-label">¿Vulnerabilidad?</div>
+                  <div class="finding-desc"><strong>No es una vulnerabilidad.</strong> Invalida el escaneo de directorios en modo default. Requiere ajuste técnico.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(0,200,255,.05);border-color:rgba(0,200,255,.2)">
+                <div class="finding-dot" style="background:var(--cyan)"></div>
+                <div>
+                  <div class="finding-label">Ajuste aplicado</div>
+                  <div class="finding-desc">Relanzar con <span class="mono text-cyan">--exclude-length 521</span> para filtrar wildcard y obtener resultados de rutas reales.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 9: FUZZING
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon red">🎯</div>
+          <div>
+            <div class="slide-tag">Fase 2 · Fuzzing de Endpoints API</div>
+            <h1 class="slide-title">FFUF — API Endpoint Fuzzing</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Comandos ejecutados</div>
+              <div class="code-block">
+<span class="cm"># Fuzzing admin-service</span>
+<span class="kw">ffuf</span> \
+  -u http://<span class="num">10.40.37.240</span>:<span class="num">3001</span>/FUZZ \
+  -w /usr/share/wordlists/dirbuster/\
+directory-list-2.3-medium.txt \
+  -mc <span class="num">200,201,204,301,302,401,403</span> \
+  -o intel/ffuf-admin.json
+
+<span class="cm"># Fuzzing auth-service</span>
+<span class="kw">ffuf</span> \
+  -u http://<span class="num">10.40.37.240</span>:<span class="num">3003</span>/FUZZ \
+  -w /usr/share/wordlists/dirbuster/\
+directory-list-2.3-medium.txt \
+  -mc <span class="num">200,201,204,301,302,401,403</span> \
+  -o intel/ffuf-auth.json
+              </div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Capturas del proceso</div>
+              <div class="screenshot-frame">
+                <img src="../evidence/fuzzing_parte1.png" alt="fuzzing parte 1" />
+              </div>
+              <div class="screenshot-caption">fuzzing_parte1.png</div>
+              <div class="screenshot-frame mt-6">
+                <img src="../evidence/fuzzing_parte2.png" alt="fuzzing parte 2" />
+              </div>
+              <div class="screenshot-caption">fuzzing_parte2.png</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 10: POSTGRESQL ENUM
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon blue">🗄️</div>
+          <div>
+            <div class="slide-tag">Fase 2 · PostgreSQL & Tráfico</div>
+            <h1 class="slide-title">Enumeración de PostgreSQL y Captura de Tráfico</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Enumeración PostgreSQL (5432)</div>
+              <div class="code-block">
+<span class="cm"># Banner grabbing & scripts</span>
+<span class="kw">nmap</span> -p <span class="num">5432</span> \
+  <span class="flag">--script</span>=pgsql-brute,\
+pgsql-empty-passwords,\
+pgsql-info,pgsql-version \
+  <span class="num">10.40.37.240</span> \
+  -oA intel/postgres-enum
+              </div>
+              <div class="screenshot-frame">
+                <img src="../evidence/postgres/version-verificar-postgres.png" alt="postgres version" />
+              </div>
+              <div class="screenshot-caption">version-verificar-postgres.png</div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Captura de tráfico</div>
+              <div class="code-block">
+<span class="cm"># Captura en background</span>
+<span class="kw">sudo</span> tcpdump \
+  -i eth0 \
+  host <span class="num">10.40.37.240</span> \
+  -w intel/traffic.pcap &
+              </div>
+              <div class="screenshot-frame">
+                <img src="../evidence/captura de trafico/image.png" alt="traffic capture" />
+              </div>
+              <div class="screenshot-caption">Captura de tráfico — tcpdump</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 11: THREAT MODELING
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon red">⚠️</div>
+          <div>
+            <div class="slide-tag">Fase 3</div>
+            <h1 class="slide-title">Threat Modeling — Modelado de Amenazas</h1>
+          </div>
+          <div style="margin-left:auto"><span class="pill orange">F-3 EN PROGRESO</span></div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Vectores de ataque identificados</div>
+              <div class="finding" style="background:rgba(255,77,106,.05);border-color:rgba(255,77,106,.2)">
+                <div class="finding-dot" style="background:var(--red)"></div>
+                <div>
+                  <div class="finding-label">Sin API Gateway / Reverse Proxy</div>
+                  <div class="finding-desc">Microservicios expuestos directamente en LAN sin capa de protección intermedia.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(255,77,106,.05);border-color:rgba(255,77,106,.2)">
+                <div class="finding-dot" style="background:var(--red)"></div>
+                <div>
+                  <div class="finding-label">Comunicación sin cifrar (HTTP)</div>
+                  <div class="finding-desc">Todo el tráfico entre cliente y microservicios en texto plano — vulnerable a sniffing en LAN.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(255,77,106,.05);border-color:rgba(255,77,106,.2)">
+                <div class="finding-dot" style="background:var(--red)"></div>
+                <div>
+                  <div class="finding-label">PostgreSQL expuesto (5432)</div>
+                  <div class="finding-desc">Puerto de base de datos accesible desde LAN sin firewall intermedio.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(255,140,66,.05);border-color:rgba(255,140,66,.2)">
+                <div class="finding-dot" style="background:var(--orange)"></div>
+                <div>
+                  <div class="finding-label">Vite preview en producción</div>
+                  <div class="finding-desc">Servidor de desarrollo Vite no es seguro para producción.</div>
+                </div>
+              </div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Escenarios de ataque</div>
+              <div class="card">
+                <div class="card-title">Escenario A — auth-service (crítico)</div>
+                <div style="font-size:15px;color:var(--text-2);margin-top:4px;line-height:1.5">
+                  Fuerza bruta de credenciales · JWT weak signing/verification · Bypass de autenticación
+                </div>
+              </div>
+              <div class="card mt-6">
+                <div class="card-title">Escenario B — Base de datos</div>
+                <div style="font-size:15px;color:var(--text-2);margin-top:4px;line-height:1.5">
+                  PostgreSQL sin autenticación o credenciales débiles · SQL Injection a través de APIs
+                </div>
+              </div>
+              <div class="card mt-6">
+                <div class="card-title">Escenario C — Lateral Movement</div>
+                <div style="font-size:15px;color:var(--text-2);margin-top:4px;line-height:1.5">
+                  Desde un contenedor comprometido, pivotar hacia otros. Escalada de privilegios Docker.
+                </div>
+              </div>
+              <div class="section-label mt-8">Actualización basada en evidencia real</div>
+              <div class="finding" style="background:rgba(0,229,160,.04);border-color:rgba(0,229,160,.2)">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label text-green">CORS más restrictivo de lo esperado</div>
+                  <div class="finding-desc">auth-service y patient-service tienen whitelist activa — hipótesis de "CORS permisivo" revisada.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 12: VULNERABILITY ANALYSIS
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon red">🛡️</div>
+          <div>
+            <div class="slide-tag">Fase 4</div>
+            <h1 class="slide-title">Análisis de Vulnerabilidades — Plan y Herramientas</h1>
+          </div>
+          <div style="margin-left:auto"><span class="pill red">F-4 PLANIFICADA</span></div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Escáner web — Nikto & Nuclei</div>
+              <div class="code-block">
+<span class="cm"># Nikto en frontend y APIs</span>
+<span class="kw">nikto</span> -h http://<span class="num">10.40.37.240</span>:<span class="num">5173</span> \
+  -output vulns/nikto-frontend.txt
+<span class="kw">nikto</span> -h http://<span class="num">10.40.37.240</span>:<span class="num">3003</span> \
+  -output vulns/nikto-auth.txt
+
+<span class="cm"># Nuclei — todos los servicios</span>
+<span class="kw">nuclei</span> -u http://<span class="num">10.40.37.240</span>:<span class="num">5173</span>
+              </div>
+              <div class="section-label mt-6">Escaneo de vulnerabilidades</div>
+              <div class="screenshot-frame">
+                <img src="../evidence/analisis-vulnerabilildades/escaneo-vulnerabilidades-1.png" alt="vulnerability scan" />
+              </div>
+              <div class="screenshot-caption">escaneo-vulnerabilidades-1.png</div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Fuerza bruta — Hydra</div>
+              <div class="code-block">
+<span class="cm"># auth-service (3003)</span>
+<span class="kw">hydra</span> \
+  -l admin \
+  -P /usr/share/wordlists/rockyou.txt \
+  http-post-form://<span class="num">10.40.37.240</span>:<span class="num">3003</span>/\
+api/login:"username=^USER^&password=\
+^PASS^:F=invalid"
+              </div>
+              <div class="section-label mt-6">Endpoints sin autenticación</div>
+              <div class="code-block">
+<span class="kw">for</span> port in <span class="num">3001 3002 3003 3004 3005</span>; do
+  <span class="kw">curl</span> -s \
+    http://<span class="num">10.40.37.240</span>:$port/api/users
+done
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--text-3)"></div>
+                <div>
+                  <div class="finding-label">Docker API — Verificación</div>
+                  <div class="finding-desc"><span class="mono">curl http://10.40.37.240:2375/version</span> — Verificar exposición daemon Docker</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 13: EXPLOITATION
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon red">⚡</div>
+          <div>
+            <div class="slide-tag">Fase 5 — Fase 6</div>
+            <h1 class="slide-title">Explotación y Post-Explotación</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">F-5: Explotación</div>
+              <div class="finding" style="background:rgba(255,77,106,.05);border-color:rgba(255,77,106,.2)">
+                <div class="finding-dot" style="background:var(--red)"></div>
+                <div>
+                  <div class="finding-label">PostgreSQL — Acceso directo</div>
+                  <div class="finding-desc"><span class="mono">psql -h 10.40.37.240 -p 5432 -U postgres</span> — Extracción de bases de datos, tablas y datos sensibles PII/PHI.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(255,77,106,.05);border-color:rgba(255,77,106,.2)">
+                <div class="finding-dot" style="background:var(--red)"></div>
+                <div>
+                  <div class="finding-label">JWT — Análisis de tokens débiles</div>
+                  <div class="finding-desc"><span class="mono">jwt_tool.py</span> — Decodificar sin firma, verificar weak secrets con rockyou, forjar con alg=none.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(255,140,66,.05);border-color:rgba(255,140,66,.2)">
+                <div class="finding-dot" style="background:var(--orange)"></div>
+                <div>
+                  <div class="finding-label">Metasploit — Exploits PostgreSQL</div>
+                  <div class="finding-desc"><span class="mono">exploit/linux/postgres/postgres_payload</span> — Si hay credenciales válidas.</div>
+                </div>
+              </div>
+              <div class="code-block" style="margin-top:4px">
+<span class="cm"># Extraer JWT y analizar</span>
+<span class="kw">curl</span> -X POST http://<span class="num">10.40.37.240</span>:<span class="num">3003</span>/api/login \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"username":"admin","password":"PASS"}'</span> \
+  | jq <span class="str">'.token'</span>
+              </div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">F-6: Post-Explotación</div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--purple)"></div>
+                <div>
+                  <div class="finding-label">Verificación de contenedor</div>
+                  <div class="finding-desc"><span class="mono">ls /.dockerenv</span> · <span class="mono">cat /proc/1/cgroup | grep docker</span></div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--purple)"></div>
+                <div>
+                  <div class="finding-label">Secrets en variables de entorno</div>
+                  <div class="finding-desc"><span class="mono">env | grep -i "pass\|secret\|key\|token"</span> — Exfiltración controlada de credenciales.</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--purple)"></div>
+                <div>
+                  <div class="finding-label">Movimiento lateral</div>
+                  <div class="finding-desc"><span class="mono">nmap -sn 172.21.0.0/24</span> — Escaneo de red interna Docker para pivot entre contenedores.</div>
+                </div>
+              </div>
+              <div class="section-label mt-8">Clasificación de datos objetivo</div>
+              <div class="row gap-6">
+                <span class="pill red">PII — Pacientes</span>
+                <span class="pill red">PHI — Historiales</span>
+                <span class="pill orange">Credenciales DB</span>
+                <span class="pill purple">JWT Secrets</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 14: HALLAZGOS RESUMEN
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon green">📊</div>
+          <div>
+            <div class="slide-tag">Resumen de Hallazgos</div>
+            <h1 class="slide-title">Superficie de Ataque — Mapa de Riesgo</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Hallazgos confirmados (Fase 2)</div>
+              <div class="finding" style="background:rgba(255,77,106,.05);border-color:rgba(255,77,106,.2)">
+                <div class="finding-dot" style="background:var(--red)"></div>
+                <div>
+                  <div class="finding-label">X-Powered-By: Express expuesto</div>
+                  <div class="finding-desc">5 microservicios · Fingerprinting trivial del framework</div>
+                </div>
+                <div class="finding-badge"><span class="pill orange">Bajo</span></div>
+              </div>
+              <div class="finding" style="background:rgba(255,77,106,.05);border-color:rgba(255,77,106,.2)">
+                <div class="finding-dot" style="background:var(--red)"></div>
+                <div>
+                  <div class="finding-label">PostgreSQL (5432) accesible en LAN</div>
+                  <div class="finding-desc">Sin capa de red protectora entre clientes y DB</div>
+                </div>
+                <div class="finding-badge"><span class="pill red">Alto</span></div>
+              </div>
+              <div class="finding" style="background:rgba(255,140,66,.05);border-color:rgba(255,140,66,.2)">
+                <div class="finding-dot" style="background:var(--orange)"></div>
+                <div>
+                  <div class="finding-label">Comunicación HTTP (sin TLS)</div>
+                  <div class="finding-desc">Todo el tráfico en texto plano — sniffing posible</div>
+                </div>
+                <div class="finding-badge"><span class="pill orange">Medio</span></div>
+              </div>
+              <div class="finding" style="background:rgba(255,140,66,.05);border-color:rgba(255,140,66,.2)">
+                <div class="finding-dot" style="background:var(--orange)"></div>
+                <div>
+                  <div class="finding-label">Vite preview como servidor de producción</div>
+                  <div class="finding-desc">No diseñado para producción, puede exponer sourcemaps</div>
+                </div>
+                <div class="finding-badge"><span class="pill orange">Medio</span></div>
+              </div>
+              <div class="finding" style="background:rgba(0,229,160,.04);border-color:rgba(0,229,160,.2)">
+                <div class="finding-dot" style="background:var(--green)"></div>
+                <div>
+                  <div class="finding-label">CORS restrictivo en auth y patient</div>
+                  <div class="finding-desc">Whitelist activa — buena práctica confirmada</div>
+                </div>
+                <div class="finding-badge"><span class="pill green">OK</span></div>
+              </div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Progreso de las fases</div>
+              <div class="progress-row">
+                <div class="progress-label">Pre-engagement</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:80%"></div></div>
+                <div class="progress-val text-green">80%</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">Intelligence Gathering</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:70%"></div></div>
+                <div class="progress-val text-cyan">70%</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">Threat Modeling</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:30%;background:linear-gradient(90deg,var(--orange),var(--yellow))"></div></div>
+                <div class="progress-val text-orange">30%</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">Vuln Analysis</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:10%;background:linear-gradient(90deg,var(--red),var(--orange))"></div></div>
+                <div class="progress-val text-red">10%</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">Exploitation</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                <div class="progress-val text-muted">0%</div>
+              </div>
+              <div class="progress-row">
+                <div class="progress-label">Post-Exploitation</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                <div class="progress-val text-muted">0%</div>
+              </div>
+              <div class="section-label mt-6">Pendientes críticos</div>
+              <div class="row gap-6" style="flex-wrap:wrap">
+                <span class="pill orange">Gobuster APIs</span>
+                <span class="pill orange">FFUF completo</span>
+                <span class="pill red">Nikto + Nuclei</span>
+                <span class="pill red">SQLMap</span>
+                <span class="pill red">Hydra brute</span>
+                <span class="pill purple">NSE PostgreSQL</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 15: RECOMENDACIONES
+      ===================== -->
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-icon green">🛠️</div>
+          <div>
+            <div class="slide-tag">Fase 7 · Reporting</div>
+            <h1 class="slide-title">Recomendaciones de Remediación</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-6">
+              <div class="section-label">Remediaciones prioritarias</div>
+              <div class="card">
+                <div class="card-title" style="color:var(--red)">🔴 Alta prioridad</div>
+                <div style="font-size:15px;color:var(--text-2);margin-top:6px;line-height:1.6">
+                  • Poner PostgreSQL detrás de firewall interno (no exponer 5432 a LAN)<br/>
+                  • Implementar API Gateway (Kong, Nginx) como punto único de entrada<br/>
+                  • Habilitar TLS/HTTPS en todos los servicios
+                </div>
+              </div>
+              <div class="card mt-6">
+                <div class="card-title" style="color:var(--orange)">🟠 Media prioridad</div>
+                <div style="font-size:15px;color:var(--text-2);margin-top:6px;line-height:1.6">
+                  • Migrar frontend a servidor de producción (Nginx/Apache) — retirar Vite preview<br/>
+                  • Agregar <span class="mono">helmet</span> a Express para ocultar <span class="mono">X-Powered-By</span><br/>
+                  • Implementar rate limiting en auth-service (express-rate-limit)
+                </div>
+              </div>
+              <div class="card mt-6">
+                <div class="card-title" style="color:var(--yellow)">🟡 Baja prioridad</div>
+                <div style="font-size:15px;color:var(--text-2);margin-top:6px;line-height:1.6">
+                  • Auditar políticas CORS en admin, appointment y medical-service<br/>
+                  • Verificar gestión segura de JWT secrets (rotación, expiración corta)<br/>
+                  • Revisar variables de entorno y secretos en Docker Compose
+                </div>
+              </div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Consideraciones éticas</div>
+              <div class="finding" style="background:rgba(0,200,255,.05);border-color:rgba(0,200,255,.2)">
+                <div class="finding-dot" style="background:var(--cyan)"></div>
+                <div>
+                  <div class="finding-label">Autorización previa</div>
+                  <div class="finding-desc">Nunca ejecutar pruebas sin autorización escrita del propietario del sistema.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(0,200,255,.05);border-color:rgba(0,200,255,.2)">
+                <div class="finding-dot" style="background:var(--cyan)"></div>
+                <div>
+                  <div class="finding-label">Datos PHI/PII</div>
+                  <div class="finding-desc">Si se accede a datos de pacientes, documentar el acceso pero NO copiar datos fuera del entorno de prueba.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(0,200,255,.05);border-color:rgba(0,200,255,.2)">
+                <div class="finding-dot" style="background:var(--cyan)"></div>
+                <div>
+                  <div class="finding-label">Sin DoS</div>
+                  <div class="finding-desc">Evitar pruebas que puedan causar denegación de servicio — respetar acuerdos de alcance.</div>
+                </div>
+              </div>
+              <div class="finding" style="background:rgba(0,200,255,.05);border-color:rgba(0,200,255,.2)">
+                <div class="finding-dot" style="background:var(--cyan)"></div>
+                <div>
+                  <div class="finding-label">Limpieza post-prueba</div>
+                  <div class="finding-desc">Eliminar cualquier backdoor, persistencia o artefacto dejado durante la explotación.</div>
+                </div>
+              </div>
+              <div class="card mt-6" style="background:rgba(168,85,247,.06);border-color:rgba(168,85,247,.25)">
+                <div class="card-title" style="color:var(--purple)">Template de hallazgo (CVSS)</div>
+                <div style="font-size:14px;color:var(--text-2);margin-top:4px;line-height:1.5">
+                  Severidad · CVSS v3.1 Score · Descripción · Evidencia · Impacto · Remediación · Referencias CVE
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================
+           SLIDE 16: CONCLUSIONES
+      ===================== -->
+      <div class="slide" id="slide-cover" style="background:var(--bg-base)">
+        <div class="slide-header">
+          <div class="slide-icon cyan">🏁</div>
+          <div>
+            <div class="slide-tag">Conclusiones</div>
+            <h1 class="slide-title">Resumen y Próximos Pasos</h1>
+          </div>
+        </div>
+        <div class="slide-body">
+          <div class="divider"></div>
+          <div class="split-50-50">
+            <div class="col gap-8">
+              <div class="section-label">Lo que se logró</div>
+              <div class="grid-2" style="gap:10px">
+                <div class="card" style="text-align:center">
+                  <div class="card-value">7</div>
+                  <div class="card-sub">Fases PTES documentadas</div>
+                </div>
+                <div class="card" style="text-align:center">
+                  <div class="card-value" style="color:var(--green)">5</div>
+                  <div class="card-sub">Hallazgos confirmados</div>
+                </div>
+                <div class="card" style="text-align:center">
+                  <div class="card-value" style="color:var(--purple)">7</div>
+                  <div class="card-sub">Servicios auditados</div>
+                </div>
+                <div class="card" style="text-align:center">
+                  <div class="card-value" style="color:var(--orange)">12</div>
+                  <div class="card-sub">Evidencias capturadas</div>
+                </div>
+              </div>
+              <div class="section-label mt-4">Integrantes</div>
+              <div class="col gap-6">
+                <div class="member-chip" style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:10px 16px;gap:14px">
+                  <div class="member-avatar" style="background:var(--cyan);width:38px;height:38px;font-size:16px">J</div>
+                  <div>
+                    <div class="member-name" style="font-size:17px">Jairo Bonilla</div>
+                    <div style="font-size:13px;color:var(--text-3)">Intelligence Gathering · Recon</div>
+                  </div>
+                </div>
+                <div class="member-chip" style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:10px 16px;gap:14px">
+                  <div class="member-avatar" style="background:var(--purple);width:38px;height:38px;font-size:16px">R</div>
+                  <div>
+                    <div class="member-name" style="font-size:17px">Reishel Tipán</div>
+                    <div style="font-size:13px;color:var(--text-3)">Threat Modeling · CORS Analysis</div>
+                  </div>
+                </div>
+                <div class="member-chip" style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:10px 16px;gap:14px">
+                  <div class="member-avatar" style="background:var(--green);width:38px;height:38px;font-size:16px;color:var(--bg-base)">J</div>
+                  <div>
+                    <div class="member-name" style="font-size:17px">Julio Viche</div>
+                    <div style="font-size:13px;color:var(--text-3)">Vulnerability Analysis · Reporting</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col gap-6">
+              <div class="section-label">Próximos pasos</div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--text-3)"></div>
+                <div>
+                  <div class="finding-label">1. Completar enumeración (Fase 2)</div>
+                  <div class="finding-desc">Gobuster contra APIs · Enumeración PostgreSQL NSE · tcpdump completo</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--text-3)"></div>
+                <div>
+                  <div class="finding-label">2. Ejecutar análisis de vulnerabilidades (Fase 4)</div>
+                  <div class="finding-desc">Nikto · Nuclei · SQLMap · Hydra brute force · Docker API check</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--text-3)"></div>
+                <div>
+                  <div class="finding-label">3. Formalizar Threat Model (Fase 3)</div>
+                  <div class="finding-desc">Actualizar <span class="mono">intel/threat-model.md</span> con hallazgos reales de Fase 2</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--text-3)"></div>
+                <div>
+                  <div class="finding-label">4. Explotación controlada (Fase 5)</div>
+                  <div class="finding-desc">Validar vulnerabilidades encontradas · Documentar con evidencia</div>
+                </div>
+              </div>
+              <div class="finding">
+                <div class="finding-dot" style="background:var(--text-3)"></div>
+                <div>
+                  <div class="finding-label">5. Reporte final (Fase 7)</div>
+                  <div class="finding-desc">Fichas de hallazgo con CVSS · Resumen ejecutivo · Recomendaciones</div>
+                </div>
+              </div>
+              <div class="card mt-4" style="background:rgba(0,200,255,.05);border-color:rgba(0,200,255,.2);text-align:center">
+                <div class="mono text-cyan" style="font-size:15px;font-weight:700;">Sistema de Atención QR — Pentesting PTES</div>
+                <div style="font-size:13px;color:var(--text-3);margin-top:4px">Jairo Bonilla · Reishel Tipán · Julio Viche</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /slides-track -->
+  </div><!-- /slide-viewport -->
+
+  <!-- NAVIGATION -->
+  <div id="nav">
+    <button id="btn-prev" aria-label="Anterior" disabled>&#8592;</button>
+    <div id="dot-track"></div>
+    <button id="btn-next" aria-label="Siguiente">&#8594;</button>
+    <span id="slide-counter">1 / 16</span>
+  </div>
+</div><!-- /presentation -->
+
+<div id="key-hint"><kbd>←</kbd> <kbd>→</kbd> para navegar</div>
+
+<script>
+  const track   = document.getElementById('slides-track');
+  const slides  = Array.from(track.children);
+  const total   = slides.length;
+  const btnPrev = document.getElementById('btn-prev');
+  const btnNext = document.getElementById('btn-next');
+  const counter = document.getElementById('slide-counter');
+  const dotTrack = document.getElementById('dot-track');
+
+  let current = 0;
+
+  // Build dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.addEventListener('click', () => goTo(i));
+    dotTrack.appendChild(d);
+  });
+
+  function goTo(n) {
+    slides[current].style.opacity = '1';
+    current = Math.max(0, Math.min(n, total - 1));
+    track.style.transform = `translateX(-${current * 100}%)`;
+    counter.textContent = `${current + 1} / ${total}`;
+    btnPrev.disabled = current === 0;
+    btnNext.disabled = current === total - 1;
+    dotTrack.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === current);
+    });
+  }
+
+  btnPrev.addEventListener('click', () => goTo(current - 1));
+  btnNext.addEventListener('click', () => goTo(current + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown')  goTo(current + 1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')    goTo(current - 1);
+    if (e.key === 'Home') goTo(0);
+    if (e.key === 'End')  goTo(total - 1);
+  });
+</script>
+</body>
+</html>
